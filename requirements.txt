@@ -1,0 +1,17 @@
+# This file is used by pip to install required python packages
+# Usage: pip install -r requirements.txt
+
+Flask==3.0.0
+python-dotenv==1.0.0
+pymongo[srv]
+Flask-PyMongo
+flask_cors
+tensorflow
+numpy
+click
+itsdangerous
+Jinja2
+MarkupSafe
+Pillow
+PyJWT
+Werkzeug
