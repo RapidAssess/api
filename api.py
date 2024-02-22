@@ -5,7 +5,7 @@ from gridfs import GridFS
 from dotenv import load_dotenv
 import os
 import base64
-
+import bcrypt
 
 from auth_middleware import token_required
 
@@ -145,16 +145,21 @@ def delete_image(image_id):
         return jsonify({"error": str(e)})
 
 
+
 @app.route('/image', methods=['POST'])
 def insert_img():
     try:
         if 'image' in request.files:
             image = request.files['image']
-            name = request.form.get("name", "")  # Get the name from the request
-            description = request.form.get("description", "")  # Get the description from the request
+            name = request.form.get("name", "")  
+            description = request.form.get("description", "")  
+            user_id = request.form.get("user_id", "")  
 
+           
+            if not ObjectId.is_valid(user_id):
+                return jsonify({"error": "Invalid user ID format"})
 
-            # Save the uploaded image to a file temporarily
+            
             image_path = 'img.jpg'
             image.save(image_path)
 
@@ -162,41 +167,25 @@ def insert_img():
             with open(image_path, 'rb') as image_file:
                 image_id = fs.put(image_file, filename=image.filename, name=name, description=description)
 
-            # Insert the image file ID into the 'backend' collection
-            result = collection.insert_one({'image_file_id': image_id, 'ifImage': 'Yes', 'name': name, 'description': description})
+            
+            result = collection.insert_one({
+                'image_file_id': image_id,
+                'ifImage': 'Yes',
+                'name': name,
+                'description': description,
+                'user_id': user_id  
+            })
 
             
-
-            # Return the image document ID in the response
             return jsonify({"message": "Image uploaded successfully", "imageID": str(result.inserted_id)})
         else:
             return jsonify({"error": "No image file provided in the request"})
-
     except Exception as e:
         return jsonify({"error": str(e)})
 
 
 
-            # Save the uploaded image to a file temporarily
-            image_path = 'img.jpg'
-            image.save(image_path)
 
-            # GridFS file and insert to MongoDB 
-            with open(image_path, 'rb') as image_file:
-                image_id = fs.put(image_file, filename=image.filename, name=name, description=description)
-
-            # Insert the image file ID into the 'backend' collection
-            result = collection.insert_one({'image_file_id': image_id, 'ifImage': 'Yes', 'name': name, 'description': description})
-
-            
-
-            # Return the image document ID in the response
-            return jsonify({"message": "Image uploaded successfully", "imageID": str(result.inserted_id)})
-        else:
-            return jsonify({"error": "No image file provided in the request"})
-
-    except Exception as e:
-        return jsonify({"error": str(e)})
 
 
 @app.route('/aiimages/<string:imageID>', methods=['GET'])
@@ -234,10 +223,10 @@ def get_images_by_imageID(imageID):
         return jsonify({"error": str(e)})
 
 
-@app.route('/images', methods=['GET'])
-def get_all_images():
+@app.route('/images/<string:user_id>', methods=['GET'])
+def get_all_images(user_id):
     try:
-        image_documents = list(collection.find({"ifImage": "Yes"}))
+        image_documents = list(collection.find({"ifImage": "Yes", "user_id": user_id}))
         image_data_list = []
 
         for doc in image_documents:
@@ -246,8 +235,8 @@ def get_all_images():
                 image_data = image_file.read()
                 base64_data = base64.b64encode(image_data).decode('utf-8')
                 image_data_list.append({
-                    "imageID": str(doc['_id']),  # MongoDB-generated _id as imageID
-                    "image_file_id": str(doc['image_file_id']),  # Include the GridFS file ID
+                    "imageID": str(doc['_id']), 
+                    "image_file_id": str(doc['image_file_id']),  
                     "data": base64_data,
                     "name": doc.get("name", ""),
                     "description": doc.get("description", "")
@@ -264,25 +253,35 @@ def get_all_images():
 @app.route('/edituser', methods=['POST'])
 @token_required
 def edit_user(current_user):
+    # user to update
+    # format: {"update":username to update, "username": ... "password": new password }
     try:
-        # user to update
-        # format: {"update":username to update, "username": ... "password": new password }
         data = request.json
-        # check if user exists
-        result = collection.find_one({"_id":current_user["_id"]})
-        if result :
-            # update
-            dict = {}
-            if "name" in data :
-                dict["name"] = data["name"]
+
+       
+        result = collection.find_one({"_id": current_user["_id"]})
+        if result:
+            updates = {}
+            if "name" in data:
+                updates["name"] = data["name"]
+            
             # update username (commented since it should be unique and unchanged)
             #if "username" in data :
             #    dict["username"] = data["username"]
-            if "password" in data :
-                dict["password"] = data["password"]
-            
-            collection.update_one({'username':current_user["username"]},{"$set":dict})
-            return jsonify({"msg": "User update successful"})
+
+            # Update the password if provided
+            if "password" in data:
+                # Hash the new password
+                hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
+                updates["password"] = hashed_password
+
+           
+            if updates:
+                collection.update_one({'_id': current_user["_id"]}, {"$set": updates})
+                return jsonify({"msg": "User update successful"})
+            else:
+                return jsonify({"msg": "No updates performed"})
+
         return jsonify({"msg": "User does not exist"})
     except Exception as e:
         return jsonify({'error': str(e)})
@@ -294,13 +293,12 @@ def edit_user(current_user):
 @token_required
 def delete_user(current_user):
     try:
-        # Request by anything
-        #data = request.json
+       
         result = collection.find_one({"_id":current_user['_id']})
         if result :
-            # delete and store in result
+            
             collection.delete_one(result)
-            # return success message
+            
             return jsonify({"msg": "User deleted successfully"})
         
         return jsonify({"msg": "User does not exist"})
@@ -308,30 +306,39 @@ def delete_user(current_user):
         return jsonify({'error': str(e)})
 
 # login by username and password
-# Returns user token
+# Returns user token ad user_id
 @app.route('/login', methods=['POST'])
-def login() :
-    try :
+def login():
+    try:
         data = request.json
 
-        # get the username to read
-        user = collection.find_one({'username':data['username']})
+        
+        user = collection.find_one({'username': data['username']})
 
-        # if user exists
-        if user :
-            # password from request
-            passwordtry = data['password']
-            # compare to actual password
-            if passwordtry == user['password'] :
-                user["token"] = jwt.encode(
+        
+        if user:
+            
+            password_try = data['password'].encode('utf-8')
+            
+            
+            hashed_password = user['password']
+            
+           
+            if bcrypt.checkpw(password_try, hashed_password):
+                
+                user_token = jwt.encode(
                     {"user_id": str(user["_id"])},
                     app.config["SECRET_KEY"],
                     algorithm="HS256"
                 )
-                return jsonify({"user_token": str(user['token']),"msg": "user logged in"})
-        return jsonify({"msg":"password is incorrect"})
+                return jsonify({"user_token": str(user_token), "user_id": str(user['_id']), "msg": "User logged in"}), 200
+            else:
+                return jsonify({"msg": "Password is incorrect"})
+        else:
+            return jsonify({"msg": "User not found"})
     except Exception as e:
         return jsonify({'error': str(e)})
+
 
 # primarily for development
 # user can be read by anything, returns all user information
@@ -357,26 +364,38 @@ def read_user() :
 @app.route('/adduser', methods=['POST'])
 def create_user():
     try:
-        # Get JSON data from the request
         data = request.json
 
-        # check if username already exists
-        currentusername = collection.find_one({"username":data["username"]})
-        if currentusername :
-            return jsonify({"msg":"username taken"})
+        # Check if username already exists
+        currentusername = collection.find_one({"username": data["username"]})
+        if currentusername:
+            return jsonify({"msg": "Username already taken"})
 
-        # Insert the data into the "backend" collection
+       
+        hashed_password = bcrypt.hashpw(data['password'].encode('utf-8'), bcrypt.gensalt())
+
+        
+        data['password'] = hashed_password
+
+        
         collection.insert_one(data)
-        user = collection.find_one(data)
-        # Gen token
+
+        
+        user = collection.find_one({"username": data["username"]})
+
+        # Generate token
         user["token"] = jwt.encode(
             {"user_id": str(user["_id"])},
             app.config["SECRET_KEY"],
             algorithm="HS256"
         )
 
-        # Return a JSON response
-        return jsonify({'user_token': str(user['token']), 'msg': 'User added successfully'})
+        
+        return jsonify({
+            'user_token': str(user['token']), 
+            'user_id': str(user['_id']),  
+            'msg': 'User added successfully'
+        })
     except Exception as e:
         return jsonify({'error': str(e)})
 
