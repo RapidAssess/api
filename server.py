@@ -90,8 +90,10 @@ def read_image(path):
         print(f"Error while reading image: {e}")
         return None
     
-def within_bounds(r, c):
-    return r >= 0 and c >= 0 and c <= W - 1 and r <= W - 1 
+#def within_bounds(r, c):
+#  return r >= 0 and c >= 0 and c <= W - 1 and r <= W - 1 
+def within_bounds(point, max_dims):
+    return all(0 <= point[dim] < max_dims[dim] for dim in range(2))
 
 @app.route("/predict", methods=["POST"])
 def processReq():
@@ -99,9 +101,12 @@ def processReq():
     # end = [220, 50]
     form = request.form
     # print(type(form["startX"]))
-    start = [255 - int(form["startY"]), int(form["startX"])]
-    end = [255 - int(form["endY"]), int(form["endX"])]
+    start = [255 - int(round(float(form["startY"]))), int(round(float(form["startX"])))]
+
+    end = [255 - int(round(float(form["endY"]))), int(round(float(form["endX"])))]
+
     thresh = int(form["threshold"])
+
     # print(request.form)
 
     data = request.files["file"]
@@ -138,6 +143,18 @@ def processReq():
     cv2.imwrite('binary_image.png', im_bw)
     cv2.imwrite('256image.png', main)
     costs = np.where(im_bw, 1, 1000)
+
+    max_dims = costs.shape
+# Adjust start and end points if they are out of bounds
+    if not within_bounds(start, max_dims):
+        print("Start point is out of bounds, adjusting...")
+        start = [max(0, min(start[0], max_dims[0]-1)), max(0, min(start[1], max_dims[1]-1))]
+
+    if not within_bounds(end, max_dims):
+        print("End point is out of bounds, adjusting...")
+        end = [max(0, min(end[0], max_dims[0]-1)), max(0, min(end[1], max_dims[1]-1))]
+
+
     path, cost = route_through_array(costs, start=(start[0],start[1]), end=(end[0],end[1]), fully_connected=True)
     print(len(path))
     # print(cost)
@@ -158,7 +175,7 @@ def processReq():
         for delta in deltas:
             r = point[0] + delta[0]
             c = point[1] + delta[1]
-            if(within_bounds(r, c)):
+            if within_bounds((r, c), max_dims): 
                 masked_img[r][c] = path_color
 
     masked_img[start[0]][start[1]] = start_color
@@ -169,9 +186,9 @@ def processReq():
             sc = start[1] + delta[1]
             er = end[0] + delta[0]
             ec = end[1] + delta[1]
-            if(within_bounds(sr, sc)):
+            if within_bounds((sr, sc), max_dims):
                 masked_img[sr][sc] = start_color
-            if(within_bounds(er, ec)):
+            if within_bounds((er, ec), max_dims):
                 masked_img[er][ec] = end_color
     
     cv2.imwrite('pathoverlay.png', masked_img)
@@ -186,7 +203,6 @@ def processReq():
     # }
     return send_file('pathoverlay.png', mimetype='image/jpeg')
 
-	
 # Running app
 if __name__ == '__main__':
 	app.run(debug=True)
