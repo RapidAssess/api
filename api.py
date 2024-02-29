@@ -1,3 +1,4 @@
+import datetime
 from flask import Flask, request, jsonify, Response
 import jwt
 from pymongo import MongoClient
@@ -327,7 +328,7 @@ def login():
             if bcrypt.checkpw(password_try, hashed_password):
                 
                 user_token = jwt.encode(
-                    {"user_id": str(user["_id"])},
+                    {"user_id": str(user["_id"]), "exp" : str(datetime.timedelta(hours=12))},
                     app.config["SECRET_KEY"],
                     algorithm="HS256"
                 )
@@ -385,7 +386,7 @@ def create_user():
 
         # Generate token
         user["token"] = jwt.encode(
-            {"user_id": str(user["_id"])},
+            {"user_id": str(user["_id"]), "exp" : str(datetime.timedelta(hours=12))},
             app.config["SECRET_KEY"],
             algorithm="HS256"
         )
