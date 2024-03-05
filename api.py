@@ -344,20 +344,20 @@ def login():
 # primarily for development
 # user can be read by anything, returns all user information
 # comment out when deployed
-@app.route('/readuser', methods=['GET'])
-def read_user() :
-    try:
-        # params for user
-        data = request.json
-
-        result = collection.find_one(data)
-
-        # return all user info
-        user = str(result)
-
-        return jsonify({"user": user, "msg": "User loaded successfully"})
-    except Exception as e:
-        return jsonify({'error': str(e)})
+#@app.route('/readuser', methods=['GET'])
+#def read_user() :
+#    try:
+#        # params for user
+#        data = request.json
+#
+#        result = collection.find_one(data)
+#
+#        # return all user info
+#        user = str(result)
+#
+#        return jsonify({"user": user, "msg": "User loaded successfully"})
+#    except Exception as e:
+#        return jsonify({'error': str(e)})
 
 # this is basically just register 
 # make sure to pass name, username, and password
