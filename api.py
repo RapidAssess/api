@@ -328,7 +328,7 @@ def login():
             if bcrypt.checkpw(password_try, hashed_password):
                 
                 user_token = jwt.encode(
-                    {"user_id": str(user["_id"]), "exp" : str(datetime.timedelta(hours=12))},
+                    {"user_id": str(user["_id"]), "exp" : datetime.datetime.now() + datetime.timedelta(hours=12)},
                     app.config["SECRET_KEY"],
                     algorithm="HS256"
                 )
@@ -386,7 +386,7 @@ def create_user():
 
         # Generate token
         user["token"] = jwt.encode(
-            {"user_id": str(user["_id"]), "exp" : str(datetime.timedelta(hours=12))},
+            {"user_id": str(user["_id"]), "exp" : datetime.datetime.now() + datetime.timedelta(hours=12)},
             app.config["SECRET_KEY"],
             algorithm="HS256"
         )
