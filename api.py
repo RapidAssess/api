@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 import os
 import base64
 import bcrypt
+from email_validator import validate_email, EmailNotValidError
+from flask_mail import Mail, Message
 
 from auth_middleware import token_required
 
@@ -22,6 +24,15 @@ from auth_middleware import token_required
 load_dotenv()
 
 app = Flask(__name__)
+mail = Mail(app)
+app.config['MAIL_SERVER']='smtp.gmail.com'
+app.config['MAIL_PORT']=465
+app.config['MAIL_USERNAME']='rapidassess2023@gmail.com'
+app.config['MAIL_PASSWORD']='Gerber@1234'
+app.config['MAIL_USE_TLS']=False
+app.config['MAIL_USE_SSL']=True
+app.config['DEFAULT_MAIL_SENDER']='rapidassess2023@gmail.com'
+mail.connect()
 
 CORS(app)
 
@@ -267,8 +278,11 @@ def edit_user(current_user):
                 updates["name"] = data["name"]
             
             # update username (commented since it should be unique and unchanged)
-            #if "username" in data :
-            #    dict["username"] = data["username"]
+            if "username" in data :
+                currentusername = collection.find_one({"username": data["username"]})
+                if currentusername:
+                    return jsonify({"msg": "Username already taken"})
+                updates["username"] = data["username"]
 
             # Update the password if provided
             if "password" in data:
@@ -328,7 +342,7 @@ def login():
             if bcrypt.checkpw(password_try, hashed_password):
                 
                 user_token = jwt.encode(
-                    {"user_id": str(user["_id"]), "exp" : str(datetime.timedelta(hours=12))},
+                    {"user_id": str(user["_id"]), "exp" : datetime.datetime.now() + datetime.timedelta(hours=12)},
                     app.config["SECRET_KEY"],
                     algorithm="HS256"
                 )
@@ -359,13 +373,52 @@ def login():
 #    except Exception as e:
 #        return jsonify({'error': str(e)})
 
+# to recover password
+    # runs on input username, email
+@app.route('/recover', methods=['POST'])
+def recover_password():
+    try:
+        data = request.json
+
+        # will trigger error if param is missing
+        if data["username"] and data["email"] :
+            user = collection.find_one(data)
+
+        if user :
+            msg = Message(
+                'Reset Password',
+                sender = 'rapidassess2023@gmail.com',
+                recipients = [str(data["email"])]
+            )
+            msg.body = 'Frontend Link Here'
+            mail.send(msg)
+            return jsonify({"msg": "Reset Password"})
+        else :
+           return jsonify({"msg": "Invalid Request"})
+
+    except Exception as e:
+        return jsonify({'error': str(e)})
+    
+def check_email(email) :
+    try :
+        v = validate_email(email)
+
+        email = v["email"]
+        return True
+    except EmailNotValidError as e :
+        return False
+
 # this is basically just register 
-# make sure to pass name, username, and password
+# make sure to pass name, username, email and password
+# email should be passed as well for password recovery
 # Returns a user token
 @app.route('/adduser', methods=['POST'])
 def create_user():
     try:
         data = request.json
+
+        if check_email(data["email"]) == False:
+            return jsonify({"msg": "Bad email"})
 
         # Check if username already exists
         currentusername = collection.find_one({"username": data["username"]})
@@ -386,7 +439,7 @@ def create_user():
 
         # Generate token
         user["token"] = jwt.encode(
-            {"user_id": str(user["_id"]), "exp" : str(datetime.timedelta(hours=12))},
+            {"user_id": str(user["_id"]), "exp" : datetime.datetime.now() + datetime.timedelta(hours=12)},
             app.config["SECRET_KEY"],
             algorithm="HS256"
         )
