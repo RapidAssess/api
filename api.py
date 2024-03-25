@@ -266,8 +266,11 @@ def edit_user(current_user):
                 updates["name"] = data["name"]
             
             # update username (commented since it should be unique and unchanged)
-            #if "username" in data :
-            #    dict["username"] = data["username"]
+            if "username" in data :
+                currentusername = collection.find_one({"username": data["username"]})
+                if currentusername:
+                    return jsonify({"msg": "Username already taken"})
+                dict["username"] = data["username"]
 
             # Update the password if provided
             if "password" in data:
