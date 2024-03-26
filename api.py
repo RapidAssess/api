@@ -393,7 +393,7 @@ def create_user():
         
         return jsonify({
             'user_token': str(user['token']), 
-            'user_id': str(user['_id']),  
+            'user_id': str(user['_id']),
             'msg': 'User added successfully'
         })
     except Exception as e:
