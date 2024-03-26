@@ -184,9 +184,9 @@ def processReq():
     #     'class': 0,
     #     'confidence': 0,
     # }
-    return send_file('pathoverlay.png', mimetype='image/jpeg')
+    return send_file('result.png', mimetype='image/jpeg')
 
 	
 # Running app
 if __name__ == '__main__':
-	app.run(debug=True)
+	app.run(debug=True, port=5001)

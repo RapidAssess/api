@@ -47,24 +47,26 @@ fs = GridFS(db)
 @app.route('/saveAI', methods=['POST'])
 def ai_todb():
     try:
-        file_path = 'pathoverlay.png'
+        file_path = 'result.png'
         data = request.json  
         imageID = data.get('imageID')  # Need the original ID 
         user_id = data.get('user_id')
+        name = data.get('name')
 
         if not os.path.exists(file_path):
             return jsonify({"error": "File not found"})
 
         with open(file_path, 'rb') as image_file:
             # Get ID from the grid
-            image_file_id = fs.put(image_file, filename='pathoverlay.png')
+            image_file_id = fs.put(image_file, filename='result.png')
 
             
             result = collection.insert_one({
                 'image_file_id': image_file_id,  
                 'imageID': imageID  ,
                 'AI': 'yes',
-                'user_id': user_id
+                'user_id': user_id,
+                'name':name
             })
 
             
@@ -206,16 +208,17 @@ def list_ai_images(user_id):
                 ai_images_list.append({
                     "aiID": str(doc['_id']),
                     "image_file_id": str(doc['image_file_id']),
-                    "imageData": base64_data,  
+                    "data": base64_data,  
                     "name": doc.get("name", ""),
-                    "description": doc.get("description", "")
+                    "description": doc.get("description", ""),
+                    "imageID": doc['imageID'],
                 })
             except Exception as e:
                 
                 print(f"Error retrieving file from GridFS: {e}")
 
         
-        return jsonify({"aiImages": ai_images_list})
+        return jsonify({"images": ai_images_list})
 
     except Exception as e:
        
@@ -242,7 +245,7 @@ def get_images_by_imageID(imageID):
                 images.append({
                     "aiID": str(doc['_id']),
                     "imageID": doc['imageID'],
-                    "aiData": encoded_image,  # Sending the ai image as a base64-encoded string
+                    "data": encoded_image,  # Sending the ai image as a base64-encoded string
                     "name": doc.get("name", ""),
                     "description": doc.get("description", "")
                 })
