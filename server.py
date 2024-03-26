@@ -17,68 +17,6 @@ model = tf.keras.models.load_model('roadseg.h5', compile = False)
 H = 256
 W = 256
 
-# model = tf.keras.models.load_model('./potatoes.h5')
-# IMAGE_SIZE = 256
-# BATCH_SIZE = 32
-
-# dataset = tf.keras.preprocessing.image_dataset_from_directory(
-#     "PlantVillage",
-#     seed=123,
-#     shuffle=True,
-#     image_size=(IMAGE_SIZE,IMAGE_SIZE),
-#     batch_size=BATCH_SIZE
-# )
-
-# class_names = dataset.class_names
-# print(class_names)
-
-# def load_image(filename):
-#     img = load_img(filename, target_size=(IMAGE_SIZE, IMAGE_SIZE))
-#     return img
-
-# Route for seeing a data
-@app.route('/data')
-async def get_time():
-
-	# Returning an api for showing in reactjs
-	return {
-		'Name':"geek", 
-		"Age":"22",
-		"programming":"python"
-		}
-
-# @app.route('/dummypredict')
-# async def predict():
-#     src = 'PlantVillage/Potato___Late_blight/0acdc2b2-0dde-4073-8542-6fca275ab974___RS_LB 4857.JPG'
-#     img = load_image(src);
-	
-#     img_array = tf.keras.preprocessing.image.img_to_array(img)
-#     img_array = tf.expand_dims(img_array, 0)
-
-#     predictions = model.predict(img_array)
-#     predicted_class = class_names[np.argmax(predictions[0])]
-#     actual_class = src.split("/")[1];
-#     confidence = round(100 * (np.max(predictions[0])), 2)
-#     print(f"Actual: {actual_class},\n Predicted: {predicted_class}.\n Confidence: {confidence}%")
-
-#     # img_array = tf.keras.preprocessing.image.img_to_array(img)
-#     # img_array = tf.expand_dims(img_array, 0)
-
-#     # # image = read_file_as_image(await file.read())
-#     # # img_batch = np.expand_dims(image, 0)
-#     # # predictions = MODEL.predict(img_batch)
-    
-#     # predictions = MODEL.predict(img_array)
-
-#     # predicted_class = CLASS_NAMES[np.argmax(predictions[0])]
-#     # confidence = np.max(predictions[0])
-
-# 	# Returning an api for showing in reactjs
-#     return {
-#         'class': predicted_class,
-#         'confidence': confidence
-#     }
-
 def read_image(path):
     try:
         img = Image.open(path)
@@ -89,24 +27,78 @@ def read_image(path):
     except Exception as e:
         print(f"Error while reading image: {e}")
         return None
+
+def make_square(image_path, output_size):
+    # Open the image
+    img = Image.open(image_path)
+    
+    # Get the dimensions of the image
+    width, height = img.size
+    
+    # Determine the size of the output square image
+    new_size = (max(width, height), max(width, height))
+    
+    # Create a new square image with black background
+    new_img = Image.new("RGB", new_size, (0, 0, 0))
+    
+    # Calculate the position to paste the original image
+    left = 0
+    top = 0
+    
+    # Paste the original image onto the new square image
+    new_img.paste(img, (left, top))
+    
+    # Resize the image to the desired output size
+    new_img = new_img.resize((output_size, output_size))
+    
+    # Save or display the new square image
+    # new_img.show()  # To display the image
+    new_img.save("img.jpg")  # To save the image
     
 def within_bounds(r, c):
     return r >= 0 and c >= 0 and c <= W - 1 and r <= W - 1 
 
 @app.route("/predict", methods=["POST"])
 def processReq():
-    # start = [20, 200]
-    # end = [220, 50]
-    form = request.form
-    # print(type(form["startX"]))
-    start = [255 - int(form["startY"]), int(form["startX"])]
-    end = [255 - int(form["endY"]), int(form["endX"])]
-    thresh = int(form["threshold"])
-    # print(request.form)
-
+    
     data = request.files["file"]
     data.save("img.jpg")
-    img = read_image("img.jpg");
+    # make_square("img.jpg", output_size=256)
+    img = read_image("img.jpg")
+
+    def get_image_dimensions(image_path):
+        with Image.open(image_path) as img:
+            width, height = img.size
+        return width, height
+
+    width, height = get_image_dimensions("img.jpg")
+    print(f"Image dimensions: {width} x {height}")
+
+    form = request.form
+
+    # startY = int(round(256 * float(form["startY"]) / height))
+    # startX = int(round(256 * float(form["startX"]) / width))
+    # endY = int(round(256 * float(form["endY"]) / height))
+    # endX = int(round(256 * float(form["endX"]) / width))
+    # middleY = int(round(256 * float(form["middleY"]) / height))
+    # middleX = int(round(256 * float(form["middleX"]) / width))
+
+    startY = int(round(float(form["startY"])))
+    startX = int(round(float(form["startX"])))
+    endY = int(round(float(form["endY"])))
+    endX = int(round(float(form["endX"])))
+    middleY = int(round(float(form["middleY"])))
+    middleX = int(round(float(form["middleX"])))
+    
+    start = [255 - startY, startX]
+    end = [255 - endY, endX]
+
+    print(start)
+    print(end)
+    middle = []
+    if(form["middleY"]):
+         middle = [255 - middleY, middleX]
+    thresh = int(form["threshold"])
 
     img_array = tf.keras.preprocessing.image.img_to_array(img)
     img_array = tf.expand_dims(img_array, 0)
@@ -138,20 +130,32 @@ def processReq():
     cv2.imwrite('binary_image.png', im_bw)
     cv2.imwrite('256image.png', main)
     costs = np.where(im_bw, 1, 1000)
-    path, cost = route_through_array(costs, start=(start[0],start[1]), end=(end[0],end[1]), fully_connected=True)
+
+    split_index = -1
+    if(middle):
+        path1, cost1 = route_through_array(costs, start=(start[0],start[1]), end=(middle[0],middle[1]), fully_connected=True)
+        path2, cost2 = route_through_array(costs, start=(middle[0],middle[1]), end=(end[0],end[1]), fully_connected=True)
+        path = path1 + path2
+        split_index = len(path1)
+    else:
+         path, cost = route_through_array(costs, start=(start[0],start[1]), end=(end[0],end[1]), fully_connected=True)
     print(len(path))
     # print(cost)
     seg_color = [255,255,255]
     path_color = [255, 0, 0]
+    path2_color = [255, 255, 0]
     start_color = [0, 255, 0]
+    middle_color = [0, 255, 255]
     end_color = [0, 0, 255]
     
 
 
     color = np.array(seg_color, dtype='uint8')
-    masked_img = np.where(im_bw[...,None], color, main)
+    # masked_img = np.where(im_bw[...,None], color, main)
+    masked_img = main
     cv2.imwrite('maskoverlay.png', masked_img)
     deltas = [-1, 0], [1, 0], [0, 1], [0, -1], [-1, -1], [-1, 1], [1, 1], [1, -1]
+    i = 0
     for point in path:
         masked_img[point[0]][point[1]] = path_color
         
@@ -159,10 +163,14 @@ def processReq():
             r = point[0] + delta[0]
             c = point[1] + delta[1]
             if(within_bounds(r, c)):
-                masked_img[r][c] = path_color
+                masked_img[r][c] = path_color if i < split_index else path2_color
+        i += 1
 
     masked_img[start[0]][start[1]] = start_color
     masked_img[end[0]][end[1]] = end_color
+
+    if(middle):
+         masked_img[middle[0]][middle[1]] = middle_color
 
     for delta in deltas:
             sr = start[0] + delta[0]
@@ -173,6 +181,11 @@ def processReq():
                 masked_img[sr][sc] = start_color
             if(within_bounds(er, ec)):
                 masked_img[er][ec] = end_color
+            if(middle):
+                mr = middle[0] + delta[0]
+                mc = middle[1] + delta[1]
+                if(within_bounds(mr, mc)):
+                    masked_img[mr][mc] = middle_color
     
     cv2.imwrite('pathoverlay.png', masked_img)
     out = cv2.addWeighted(main, 0.8, masked_img, 0.4,0)
@@ -180,13 +193,9 @@ def processReq():
     print(masked_img.shape)
     print(masked_img[start[0]][start[1]])
 
-    # return {
-    #     'class': 0,
-    #     'confidence': 0,
-    # }
     return send_file('pathoverlay.png', mimetype='image/jpeg')
 
 	
 # Running app
 if __name__ == '__main__':
-	app.run(debug=True)
+	app.run(debug=True, port=5001)
