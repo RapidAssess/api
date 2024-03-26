@@ -50,6 +50,7 @@ def ai_todb():
         file_path = 'pathoverlay.png'
         data = request.json  
         imageID = data.get('imageID')  # Need the original ID 
+        user_id = data.get('user_id')
 
         if not os.path.exists(file_path):
             return jsonify({"error": "File not found"})
@@ -61,7 +62,9 @@ def ai_todb():
             
             result = collection.insert_one({
                 'image_file_id': image_file_id,  
-                'imageID': imageID  
+                'imageID': imageID  ,
+                'AI': 'yes',
+                'user_id': user_id
             })
 
             
@@ -69,7 +72,8 @@ def ai_todb():
                 "message": "AI Image uploaded successfully",
                 "aiID": str(result.inserted_id),  # MongoDB  ID 
                 "image_file_id": str(image_file_id),  # GridFS file ID
-                "imageID": imageID
+                "imageID": imageID,
+                'user_id': user_id
             })
 
     except Exception as e:
@@ -185,6 +189,37 @@ def insert_img():
 
 
 
+@app.route('/listAI/<string:user_id>', methods=['GET'])
+def list_ai_images(user_id):
+    try:
+        
+        ai_image_documents = list(collection.find({"AI": "yes", "user_id": user_id}))
+        
+        
+        ai_images_list = []
+        for doc in ai_image_documents:
+            try:
+               
+                image_file = fs.get(doc['image_file_id'])
+                image_data = image_file.read()
+                base64_data = base64.b64encode(image_data).decode('utf-8')
+                ai_images_list.append({
+                    "aiID": str(doc['_id']),
+                    "image_file_id": str(doc['image_file_id']),
+                    "imageData": base64_data,  
+                    "name": doc.get("name", ""),
+                    "description": doc.get("description", "")
+                })
+            except Exception as e:
+                
+                print(f"Error retrieving file from GridFS: {e}")
+
+        
+        return jsonify({"aiImages": ai_images_list})
+
+    except Exception as e:
+       
+        return jsonify({"error": str(e)})
 
 
 
