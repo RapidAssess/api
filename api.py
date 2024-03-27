@@ -160,6 +160,7 @@ def insert_img():
             name = request.form.get("name", "")  
             description = request.form.get("description", "")  
             user_id = request.form.get("user_id", "")  
+            fileName = request.form.get("fileName", "") 
 
            
             if not ObjectId.is_valid(user_id):
@@ -179,7 +180,8 @@ def insert_img():
                 'ifImage': 'Yes',
                 'name': name,
                 'description': description,
-                'user_id': user_id  
+                'user_id': user_id,
+                'fileName':fileName  
             })
 
             
@@ -277,7 +279,8 @@ def get_all_images(user_id):
                     "image_file_id": str(doc['image_file_id']),  
                     "data": base64_data,
                     "name": doc.get("name", ""),
-                    "description": doc.get("description", "")
+                    "description": doc.get("description", ""),
+                    "fileName":doc.get("fileName","")
                 })
 
         return jsonify({"images": image_data_list})
